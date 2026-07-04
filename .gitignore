@@ -1,0 +1,13 @@
+# Private: never upload these
+.env
+sessions/
+
+# Local environment / junk
+venv/
+__pycache__/
+.DS_Store
+
+# Large source-image backups (the app only uses the .webp files in public/)
+new-room-original.png
+spaceship-original.png
+room-reference-original.png

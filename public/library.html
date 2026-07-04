@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Video Diary — Entries</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Pixelify+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="bg-room">
+    <!-- Same full-window scene as the record page, so the backdrop is framed
+         identically (just no webcam here). -->
+    <div class="room">
+      <div class="room-scene">
+        <img class="room-img" src="room.webp" alt="" />
+      </div>
+    </div>
+
+    <header>
+      <h1>◆ Diary Entries</h1>
+      <a class="link" href="index.html">+ New entry</a>
+    </header>
+    <main>
+      <div id="detail" class="panel hidden"></div>
+      <div id="list" class="list"></div>
+      <p id="empty" class="hint hidden">No entries yet. Record your first one!</p>
+    </main>
+    <script src="library.js"></script>
+  </body>
+</html>

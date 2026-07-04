@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Video Diary</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Pixelify+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="bg-room">
+    <!-- The pixel room fills the window; the webcam plays ON the pictured CRT -->
+    <div class="room">
+      <div class="room-scene">
+        <img class="room-img" src="room.webp" alt="" />
+        <video id="preview" autoplay muted playsinline></video>
+        <div class="crt"></div>
+        <div class="rec-badge">
+          <span id="recDot" class="rec-dot"></span>
+          <span id="recTimer" class="rec-timer hidden">0:00</span>
+        </div>
+      </div>
+    </div>
+
+    <header>
+      <div class="header-left">
+        <button id="bgToggle" class="bg-toggle" title="Switch the background scene">🚀 Spaceship</button>
+        <h1>◆ Video Diary</h1>
+      </div>
+      <a class="link" href="library.html">Past entries →</a>
+    </header>
+
+    <main class="studio">
+      <section id="setup" class="panel">
+        <p class="lede">
+          Sit comfortably. When you're ready, an interviewer will ask you a few
+          gentle questions — just talk. Everything stays on your computer.
+        </p>
+        <p id="cameraHint" class="hint">Requesting camera and microphone…</p>
+        <p id="keyNotice" class="key-notice hidden"></p>
+        <button id="startBtn" class="primary" disabled>▸ Start the interview</button>
+      </section>
+
+      <section id="interview" class="panel hidden">
+        <!-- JRPG-style dialogue box -->
+        <div class="dialog">
+          <span class="dialog-name">INTERVIEWER</span>
+          <button id="replayBtn" class="replay-btn hidden" title="Hear the question again">🔊</button>
+          <p class="dialog-text" id="question"></p>
+          <span class="dialog-cont">▼</span>
+        </div>
+
+        <p class="status" id="status"></p>
+
+        <label class="you-label" for="answer">YOU ▸</label>
+        <textarea
+          id="answer"
+          rows="2"
+          placeholder="Your words appear here as you speak — or type if you prefer."
+        ></textarea>
+        <p id="micHint" class="hint"></p>
+
+        <div class="row">
+          <button id="doneBtn" class="primary" disabled>Done — next question</button>
+          <button id="wrapBtn" class="ghost" title="The interviewer asks one final question, then your entry is saved">
+            Wrap up
+          </button>
+          <button id="endBtn" class="ghost">End &amp; save now</button>
+        </div>
+      </section>
+    </main>
+
+    <footer>Runs in Chrome · Nothing leaves your computer except the interviewer's words.</footer>
+
+    <!-- Fades over the screen while the background scene is swapped -->
+    <div id="bgFade" class="bg-fade" aria-hidden="true"><span class="bg-fade-label"></span></div>
+    <script src="app.js"></script>
+  </body>
+</html>
