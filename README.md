@@ -138,7 +138,7 @@ To stop the app, press **`Ctrl + C`** in the terminal.
 
 ![The spaceship scene — your webcam on the console screen, mid-interview](docs/interview.png)
 
-**Your saved entries live under _Past entries_:**
+**Your saved entries live under "Past entries":**
 
 ![The Past-entries library, showing saved diary cards with thumbnails, dates and summaries](docs/library.png)
 

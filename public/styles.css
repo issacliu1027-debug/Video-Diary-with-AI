@@ -391,7 +391,7 @@ footer {
 /* ===== Library ======================================================== */
 .list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(440px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(520px, 1fr));
   gap: 20px;
   margin-top: 26px;
 }
@@ -419,7 +419,10 @@ footer {
   cursor: pointer;
   flex: none;
 }
-.card-main { display: grid; gap: 6px; flex: 1; cursor: pointer; }
+/* min-width:0 lets the text column shrink & wrap so the Delete button never
+   gets pushed outside the card on narrow (multi-column) layouts. */
+.card-main { display: grid; gap: 6px; flex: 1; min-width: 0; cursor: pointer; }
+.card-del { flex: none; align-self: flex-start; }
 .card-title {
   font-family: 'Press Start 2P', monospace;
   font-size: 16px;
