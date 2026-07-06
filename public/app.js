@@ -702,15 +702,16 @@ async function saveSession() {
         ...meta,
       }),
     });
-    const { id } = await createRes.json();
+    const { id, videoName = 'video.webm', appended = false } = await createRes.json();
 
-    await fetch(`/api/sessions/${id}/video`, {
+    await fetch(`/api/sessions/${id}/video?name=${encodeURIComponent(videoName)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/octet-stream' },
       body: blob,
     });
 
-    if (thumbBlob) {
+    // Keep the entry's original poster frame — only set a thumbnail for a new entry.
+    if (thumbBlob && !appended) {
       await fetch(`/api/sessions/${id}/thumb`, {
         method: 'POST',
         headers: { 'Content-Type': 'image/jpeg' },

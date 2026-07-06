@@ -69,18 +69,35 @@ def _text_of(resp):
     return (resp.choices[0].message.content or "").strip()
 
 
-def next_question(history, recent_entries=None, wrap_up=False):
+def next_question(history, recent_entries=None, wrap_up=False, continuation=None):
     """history: [{"question", "answer"}, ...] of completed turns.
 
     recent_entries: [{"createdAt", "title", "summary"}, ...] of past diary
     entries, newest first — lets the interviewer remember previous sessions.
     wrap_up: True when the person asked to finish — reflect back and ask ONE
     final closing question.
+    continuation: {"title", "summary"} of the entry THIS recording will be added
+    onto (a session started within a few hours of the last one). When set, the
+    opening greets them as picking up an ongoing entry — a warm "welcome back,
+    more about X or something new?" — instead of a brand-new-diary greeting.
 
     Returns the next spoken question (or the opening question when history is empty).
     """
     system = SYSTEM_PROMPT
-    if recent_entries:
+    cont_topic = ""
+    if continuation:
+        cont_topic = (continuation.get("title") or "").strip()
+        detail = (continuation.get("summary") or "").strip()
+        system += (
+            "\n\nTHIS IS A CONTINUATION — a little while ago (within the last few hours) "
+            "this same person was recording with you and has just come back to keep going. "
+            "This is the SAME diary entry, not a new one.\n"
+            f'What they were talking about: "{cont_topic}" — {detail}\n'
+            "So do NOT open as if it is a fresh, first-time-today diary, and do NOT ask a "
+            'vague "what has been on your mind." You MUST name what they were talking about '
+            "and offer to continue it or switch to something new."
+        )
+    elif recent_entries:
         lines = "\n".join(
             f"- {(e.get('createdAt') or '')[:10]} — {e.get('title', '')}: {e.get('summary', '')}"
             for e in recent_entries
@@ -98,9 +115,22 @@ def next_question(history, recent_entries=None, wrap_up=False):
             "somewhere else."
         )
 
+    if continuation and cont_topic:
+        # Replace the generic kickoff so the model actually NAMES the topic instead of
+        # defaulting to a "what's on your mind" opener.
+        kickoff = (
+            f'(Begin the session now. This CONTINUES our conversation from a little while '
+            f'ago about "{cont_topic}". In ONE short, warm, natural spoken sentence: welcome '
+            f'me back, then ask whether I want to tell you more about "{cont_topic}" or talk '
+            f'about something new. You MUST mention "{cont_topic}" by name, in your own '
+            "words — do NOT just ask what has been on my mind.)"
+        )
+    else:
+        kickoff = KICKOFF
+
     messages = [
         {"role": "system", "content": system},
-        {"role": "user", "content": KICKOFF},
+        {"role": "user", "content": kickoff},
     ]
     for turn in history:
         messages.append({"role": "assistant", "content": turn.get("question", "")})

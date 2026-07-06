@@ -1,10 +1,15 @@
 import json
 import os
+import re
 import secrets
 import shutil
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+
+# Recordings started within this window of the previous entry are added onto it
+# as another "part" (same day's reflection) instead of becoming a separate entry.
+MERGE_WINDOW_SECONDS = 5 * 3600
 
 import httpx
 from dotenv import load_dotenv
@@ -69,20 +74,16 @@ def static_files(filename):
     return send_from_directory(PUBLIC, filename)
 
 
-@app.get("/sessions/<sid>/video.webm")
-def session_video(sid):
-    directory = SESSIONS / os.path.basename(sid)
-    if not (directory / "video.webm").exists():
+@app.get("/sessions/<sid>/<filename>")
+def session_media(sid, filename):
+    # Serves an entry's video part(s) — video.webm, video-2.webm, … — or its
+    # thumbnail. The filename is whitelisted so nothing else can be read.
+    if not re.fullmatch(r"video(-\d+)?\.webm|thumb\.jpg", filename):
         abort(404)
-    return send_from_directory(directory, "video.webm")  # supports range/seeking
-
-
-@app.get("/sessions/<sid>/thumb.jpg")
-def session_thumb(sid):
     directory = SESSIONS / os.path.basename(sid)
-    if not (directory / "thumb.jpg").exists():
+    if not (directory / filename).exists():
         abort(404)
-    return send_from_directory(directory, "thumb.jpg")
+    return send_from_directory(directory, filename)  # supports range/seeking
 
 
 # ---- Interviewer brain --------------------------------------------------
@@ -114,9 +115,36 @@ def api_next_question():
     body = request.get_json(silent=True) or {}
     history = body.get("history") or []
     wrap_up = bool(body.get("wrapUp"))
+
+    continuation = None
+    if not history and not wrap_up:
+        # Opening question. If the most recent entry is still within the merge window,
+        # this recording will be added onto it — so greet as a continuation of it.
+        newest = _newest_entry()
+        if newest is not None:
+            _, entry = newest
+            last = _entry_last_activity(entry)
+            if last is not None and (
+                datetime.now(timezone.utc) - last
+            ).total_seconds() <= MERGE_WINDOW_SECONDS:
+                parts = entry.get("parts")
+                recent_summary = (
+                    (parts[-1].get("summary") if isinstance(parts, list) and parts else None)
+                    or entry.get("summary")
+                    or ""
+                ).strip()
+                title = (entry.get("title") or "").strip()
+                if title.lower() == "untitled entry":
+                    title = ""
+                if title or recent_summary:  # only if there's a real topic to name
+                    continuation = {"title": title, "summary": recent_summary}
+
     try:
         question = next_question(
-            history, recent_entries=_recent_entries(), wrap_up=wrap_up
+            history,
+            recent_entries=_recent_entries(),
+            wrap_up=wrap_up,
+            continuation=continuation,
         )
         return jsonify(question=question)
     except Exception as err:  # noqa: BLE001
@@ -200,25 +228,99 @@ def api_speak():
 
 # ---- Saving & reading sessions -----------------------------------------
 
+def _parse_ts(ts):
+    """Parse an ISO timestamp (the front-end sends ...Z) to an aware UTC datetime."""
+    try:
+        return datetime.fromisoformat((ts or "").replace("Z", "+00:00"))
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _entry_last_activity(session):
+    """When an entry was last added to (its newest part) — used for the merge window."""
+    return _parse_ts(session.get("lastAt") or session.get("createdAt"))
+
+
+def _newest_entry():
+    """(directory, session) of the entry with the most recent activity, or None."""
+    newest = None
+    newest_ts = None
+    for directory in SESSIONS.iterdir():
+        meta = directory / "session.json"
+        if not (directory.is_dir() and meta.exists()):
+            continue
+        try:
+            s = json.loads(meta.read_text())
+        except Exception:  # noqa: BLE001
+            continue
+        ts = _entry_last_activity(s)
+        if ts is not None and (newest_ts is None or ts > newest_ts):
+            newest, newest_ts = (directory, s), ts
+    return newest
+
+
 @app.post("/api/sessions")
 def api_create_session():
     b = request.get_json(silent=True) or {}
+    created = b.get("createdAt") or datetime.now(timezone.utc).isoformat()
+    duration = b.get("durationSec") or 0
+    turns = b.get("transcript") if isinstance(b.get("transcript"), list) else []
+    chapters = b.get("chapters") if isinstance(b.get("chapters"), list) else []
+    summary = b.get("summary") or ""
+    title = b.get("title") or "Untitled entry"
+
+    # --- Continuation? If the most recent entry is within the merge window, add
+    #     this recording onto it as another part instead of making a new entry. ---
+    newest = _newest_entry()
+    if newest is not None:
+        directory, entry = newest
+        last = _entry_last_activity(entry)
+        now = _parse_ts(created) or datetime.now(timezone.utc)
+        if last is not None and (now - last).total_seconds() <= MERGE_WINDOW_SECONDS:
+            # On the first append, migrate the flat single-clip entry into parts[].
+            parts = entry.get("parts")
+            if not isinstance(parts, list) or not parts:
+                parts = [{
+                    "createdAt": entry.get("createdAt"),
+                    "durationSec": entry.get("durationSec") or 0,
+                    "video": "video.webm",
+                    "transcript": entry.get("transcript") if isinstance(entry.get("transcript"), list) else [],
+                    "chapters": entry.get("chapters") if isinstance(entry.get("chapters"), list) else [],
+                    "summary": entry.get("summary") or "",
+                }]
+            video_name = f"video-{len(parts) + 1}.webm"
+            parts.append({
+                "createdAt": created,
+                "durationSec": duration,
+                "video": video_name,
+                "transcript": turns,
+                "chapters": chapters,
+                "summary": summary,
+            })
+            entry["parts"] = parts
+            entry["lastAt"] = created
+            entry["durationSec"] = sum(p.get("durationSec") or 0 for p in parts)
+            entry["transcript"] = [t for p in parts for t in (p.get("transcript") or [])]
+            # title + summary stay from part 1 (the entry's identity / card preview)
+            (directory / "session.json").write_text(json.dumps(entry, indent=2))
+            return jsonify(id=entry["id"], videoName=video_name, appended=True)
+
+    # --- Otherwise a brand-new entry (same flat shape as before, plus lastAt). ---
     sid = f"s_{int(time.time() * 1000)}_{secrets.token_hex(3)}"
     directory = SESSIONS / sid
     directory.mkdir(parents=True, exist_ok=True)
-    chapters = b.get("chapters")
-    transcript = b.get("transcript")
     session = {
         "id": sid,
-        "createdAt": b.get("createdAt") or datetime.now(timezone.utc).isoformat(),
-        "title": b.get("title") or "Untitled entry",
-        "summary": b.get("summary") or "",
-        "chapters": chapters if isinstance(chapters, list) else [],
-        "transcript": transcript if isinstance(transcript, list) else [],
-        "durationSec": b.get("durationSec") or 0,
+        "createdAt": created,
+        "lastAt": created,
+        "title": title,
+        "summary": summary,
+        "chapters": chapters,
+        "transcript": turns,
+        "durationSec": duration,
     }
     (directory / "session.json").write_text(json.dumps(session, indent=2))
-    return jsonify(id=sid)
+    return jsonify(id=sid, videoName="video.webm", appended=False)
 
 
 @app.post("/api/sessions/<sid>/video")
@@ -226,7 +328,10 @@ def api_save_video(sid):
     directory = SESSIONS / os.path.basename(sid)
     if not directory.exists():
         return jsonify(error="session not found"), 404
-    (directory / "video.webm").write_bytes(request.get_data())
+    name = request.args.get("name", "video.webm")
+    if not re.fullmatch(r"video(-\d+)?\.webm", name):  # guard against path traversal
+        name = "video.webm"
+    (directory / name).write_bytes(request.get_data())
     return jsonify(ok=True)
 
 
@@ -246,7 +351,10 @@ def api_list_sessions():
         meta = directory / "session.json"
         if directory.is_dir() and meta.exists():
             s = json.loads(meta.read_text())
-            items.append({k: s.get(k) for k in ("id", "createdAt", "title", "summary", "durationSec")})
+            item = {k: s.get(k) for k in ("id", "createdAt", "title", "summary", "durationSec")}
+            parts = s.get("parts")
+            item["partCount"] = len(parts) if isinstance(parts, list) and parts else 1
+            items.append(item)
     items.sort(key=lambda x: x.get("createdAt") or "", reverse=True)
     return jsonify(items)
 
@@ -266,6 +374,46 @@ def api_delete_session(sid):
         return jsonify(error="not found"), 404
     shutil.rmtree(directory, ignore_errors=True)  # removes video.webm + session.json
     return jsonify(ok=True)
+
+
+@app.delete("/api/sessions/<sid>/parts/<int:idx>")
+def api_delete_part(sid, idx):
+    """Delete just one part (recording) of a multi-part entry, keeping the rest.
+    If it's the only remaining part, the whole entry is removed."""
+    directory = SESSIONS / os.path.basename(sid)
+    meta = directory / "session.json"
+    if not meta.exists():
+        return jsonify(error="not found"), 404
+    entry = json.loads(meta.read_text())
+    parts = entry.get("parts")
+
+    # A single-clip entry (or one down to its last part): "delete the part" = delete
+    # the whole entry.
+    if not isinstance(parts, list) or len(parts) <= 1:
+        shutil.rmtree(directory, ignore_errors=True)
+        return jsonify(ok=True, entryDeleted=True)
+
+    if idx < 0 or idx >= len(parts):
+        return jsonify(error="bad part index"), 400
+
+    removed = parts.pop(idx)
+    vid = removed.get("video")
+    if vid and re.fullmatch(r"video(-\d+)?\.webm", vid):
+        (directory / vid).unlink(missing_ok=True)  # delete that clip's video file
+
+    if not parts:  # removed the last one → drop the whole entry
+        shutil.rmtree(directory, ignore_errors=True)
+        return jsonify(ok=True, entryDeleted=True)
+
+    # Recompute the entry's aggregates from the remaining parts.
+    entry["parts"] = parts
+    entry["durationSec"] = sum(p.get("durationSec") or 0 for p in parts)
+    entry["transcript"] = [t for p in parts for t in (p.get("transcript") or [])]
+    entry["createdAt"] = parts[0].get("createdAt") or entry.get("createdAt")
+    entry["lastAt"] = parts[-1].get("createdAt") or entry.get("lastAt")
+    entry["summary"] = parts[0].get("summary") or entry.get("summary") or ""  # keep title
+    meta.write_text(json.dumps(entry, indent=2))
+    return jsonify(ok=True, entryDeleted=False)
 
 
 if __name__ == "__main__":
