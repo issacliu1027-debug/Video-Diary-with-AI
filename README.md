@@ -7,6 +7,10 @@
 
 **Runs on:** 🐍 Python · 🌐 Google Chrome · 🤖 xAI (Grok)
 
+![The Video Diary app — a cozy pixel-art room with your webcam playing on the retro monitor while the AI interviewer greets you](docs/hero.png)
+
+> *You talk to a warm AI interviewer; your webcam plays on the retro monitor, and its words appear in the dialogue box below.*
+
 ---
 
 ## ✨ What it does
@@ -26,6 +30,10 @@ you just **talk to a friendly interviewer** and it turns your words into a keeps
   plays *inside* the on-screen monitor. Switch anytime with the button in the top-left.
 - 🔒 **Private by design** — your videos and transcripts are saved **only on your computer**
   and are never uploaded anywhere.
+
+### How it works
+
+![How it works — the interviewer asks aloud, you answer to your webcam, it asks follow-ups, you wrap up, and it saves a video with an automatic title, summary and chapters](docs/how-it-works.png)
 
 ---
 
@@ -123,6 +131,22 @@ To stop the app, press **`Ctrl + C`** in the terminal.
    your entry is saved. *(Or hit **End & save now** to finish immediately.)*
 6. **Revisit anything** under **Past entries** — replay the video with its transcript and
    chapters, or delete an entry.
+
+### 🖼️ A peek inside
+
+**Prefer space to a cozy room?** Switch scenes any time with one click:
+
+![The spaceship scene — your webcam on the console screen, mid-interview](docs/interview.png)
+
+**Your saved entries live under _Past entries_:**
+
+![The Past-entries library, showing saved diary cards with thumbnails, dates and summaries](docs/library.png)
+
+**Open one to replay it.** Recordings you make within a few hours are grouped into a single
+entry as _Part 1, Part 2…_ — each with its own video, chapters and transcript. You can delete
+a single part or the whole entry:
+
+![An opened multi-part entry showing Part 1 and Part 2, each with a video, chapter markers and transcript](docs/entry-parts.png)
 
 ---
 
